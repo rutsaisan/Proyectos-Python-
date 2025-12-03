@@ -25,13 +25,13 @@ elif edad_mago >= 100:
 def poderBase(edad):
   # si es aprendiz, devuelve 5
   if classificacion_mago == "Aprendiz":
-    return 5
+    return 10
   # si es hechicero, devuelve 8
   elif classificacion_mago ==  "Hechicero":
-    return 8
+    return 15
   # si es archimago, devuelve 10
   elif classificacion_mago ==  "Archimago":
-    return 10
+    return 20
 poder = poderBase(edad_mago)
 
 # escudo empieza con 15 puntos

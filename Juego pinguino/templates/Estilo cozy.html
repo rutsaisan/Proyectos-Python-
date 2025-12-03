@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>❄️ Pingüino Cozy Snowball Collector</title>
+    <style>
+        /* Paleta de Colores Cozy/Pastel */
+        :root {
+            --fondo-base: #F7F4F3; /* Crema muy claro */
+            --fondo-nieve: #D7E3E0; /* Verde menta suave para el área de juego */
+            --acento-principal: #B1D4C6; /* Verde pastel */
+            --acento-secundario: #F3D8D8; /* Rosa pálido */
+            --texto-oscuro: #4A4A4A; /* Gris suave */
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: var(--fondo-base);
+            color: var(--texto-oscuro);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            color: var(--texto-oscuro);
+            margin-bottom: 10px;
+        }
+
+        /* Contenedor del juego */
+        .game-wrapper {
+            background-color: var(--fondo-nieve);
+            border-radius: 20px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            display: inline-block;
+        }
+
+        /* Estilo del Canvas (Area de Juego) */
+        #gameCanvas {
+            border: 5px solid var(--acento-principal);
+            background-color: white; /* El lienzo de juego */
+            display: block;
+            border-radius: 10px;
+        }
+
+        #score-display {
+            font-size: 1.5em;
+            margin-top: 15px;
+            font-weight: bold;
+            color: var(--acento-secundario);
+            background-color: var(--texto-oscuro);
+            padding: 10px 20px;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-wrapper">
+    <h1>Recoge las Bolas de Nieve Cozy ❄️</h1>
+    <p id="score-display">Puntuación: 0</p>
+    <canvas id="gameCanvas" width="600" height="400"></canvas>
+</div>
+
+<script>
+// Configuración del juego
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreDisplay = document.getElementById('score-display'); 
+let score = 0;
+let gameOver = false;
+
+// --- VARIABLES DE JUEGO ACTUALIZADAS ---
+let lives = 5.0; 
+const maxLives = 5.0;
+let snowballBaseSpeed = 0.5;
+let speedMultiplier = 1.0; 
+const accelerationInterval = 15; // ¡CAMBIO AQUÍ! Aceleración cada 15 puntos
+const speedIncrease = 0.5; 
+const PENGUIN_SPEED = 3; 
+
+// --- FUNCIÓN DE DIBUJO DE CORAZÓN (Geometría simplificada) ---
+function drawHeart(x, y, size, fill) {
+    ctx.beginPath();
+    // Dibuja una forma de corazón simplificada (dos arcos y un punto)
+    const curveRadius = size / 2;
+    const heartHeight = size * 1.2;
+    
+    // Dibuja el slot vacío (contorno)
+    ctx.strokeStyle = '#B1D4C6'; 
+    ctx.lineWidth = 1.5;
+    
+    // Path del corazón
+    ctx.moveTo(x, y + heartHeight - size);
+    ctx.arc(x - curveRadius, y - curveRadius, curveRadius, Math.PI, 0);
+    ctx.arc(x + curveRadius, y - curveRadius, curveRadius, Math.PI, 0);
+    ctx.lineTo(x, y + heartHeight - size);
+    ctx.closePath();
+    
+    // Dibuja el contorno
+    ctx.stroke();
+
+    if (fill > 0) {
+        ctx.save();
+        ctx.clip(); // Limita el dibujo al área del corazón
+
+        ctx.fillStyle = '#F3D8D8'; // Rosa pálido (relleno)
+        
+        // Dibuja el relleno completo
+        ctx.fillRect(x - size, y - size, size * 2, heartHeight * 2);
+        
+        if (fill === 0.5) {
+            // Si es medio corazón, borramos la mitad (la derecha)
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.fillRect(x + 1, y - heartHeight, curveRadius * 2, heartHeight * 2); 
+            ctx.globalCompositeOperation = 'source-over';
+        }
+        
+        ctx.restore();
+    }
+}
+
+
+// --- FUNCIÓN DE DIBUJO DE VIDAS Y PUNTUACIÓN (Corazones + HUD Externo) ---
+function drawLives() {
+    // 1. Dibuja los Corazones en el Canvas
+    const heartSize = 18;
+    const heartSpacing = heartSize + 5;
+    const startX = 20;
+    const startY = 30;
+    let currentLives = lives;
+    
+    ctx.save();
+    
+    // Título VIDAS en el canvas
+    ctx.fillStyle = '#4A4A4A';
+    ctx.font = 'bold 18px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText(`VIDAS:`, startX, startY);
+
+    for (let i = 0; i < maxLives; i++) {
+        const x = startX + i * heartSpacing + 70; // Posición X para el corazón
+        const y = startY + 15; // Posición Y para el corazón
+        
+        let fillLevel = 0;
+        if (currentLives >= 1.0) {
+            fillLevel = 1.0;
+            currentLives -= 1.0;
+        } else if (currentLives === 0.5) {
+            fillLevel = 0.5;
+            currentLives = 0;
+        }
+
+        drawHeart(x, y, heartSize, fillLevel);
+    }
+    ctx.restore();
+    
+    // 2. Actualiza la Puntuación en el ELEMENTO HTML EXTERNO (CORRECCIÓN)
+    // Usamos el elemento #score-display que está fuera del canvas
+    scoreDisplay.textContent = `Puntuación: ${score}`;
+}
+
+// --- Cargar la imagen del Pingüino (Sin cambios) ---
+const penguinImage = new Image();
+penguinImage.src = '/static/penguin.png'; 
+let penguinLoaded = false;
+
+penguinImage.onload = () => {
+    penguinLoaded = true;
+};
+
+penguinImage.onerror = () => {
+    console.error("Error al cargar la imagen del pingüino. Asegúrate de que 'penguin.png' está en la carpeta 'static'.");
+};
+
+// --- Objeto Pingüino (Sin cambios en lógica) ---
+const penguin = {
+    width: 60, height: 60, speed: PENGUIN_SPEED, dx: 0, 
+    x: (canvas.width / 2) - 30, y: canvas.height - 70, 
+    
+    draw: function() {
+        if (penguinLoaded) {
+            ctx.drawImage(penguinImage, this.x, this.y, this.width, this.height);
+        } else {
+            ctx.fillStyle = 'lightgray';
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+        }
+    },
+
+    update: function() {
+        this.x += this.dx;
+        if (this.x < 0) this.x = 0;
+        if (this.x + this.width > canvas.width) this.x = canvas.width - this.width;
+    }
+};
+
+// --- Array de Bolas de Nieve (Sin cambios en lógica) ---
+let snowballs = [];
+
+function createSnowball() {
+    if (snowballs.length > 0) return; 
+
+    const radius = Math.random() * 5 + 5; 
+    const x = Math.random() * (canvas.width - radius * 2) + radius;
+    const y = 0;
+    
+    const speed = Math.random() * 0.5 + snowballBaseSpeed * speedMultiplier; 
+
+    snowballs.push({ x, y, radius, speed });
+}
+
+function drawSnowballs() {
+    snowballs.forEach(ball => {
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        ctx.fillStyle = '#D7E3E0'; 
+        ctx.fill();
+        ctx.closePath();
+    });
+}
+
+function updateSnowballs() {
+    for (let i = 0; i < snowballs.length; i++) {
+        let ball = snowballs[i];
+        ball.y += ball.speed; 
+
+        // 1. Colisión (Recogida)
+        if (ball.x + ball.radius > penguin.x && ball.x - ball.radius < penguin.x + penguin.width &&
+            ball.y + ball.radius > penguin.y && ball.y - ball.radius < penguin.y + penguin.height) 
+        {
+            score++;
+            snowballs.splice(i, 1); 
+            i--; 
+        } 
+        // 2. Pérdida (La bola cae fuera)
+        else if (ball.y > canvas.height) {
+            lives -= 0.5; // RESTA MEDIA VIDA
+            
+            if (lives <= 0) {
+                lives = 0;
+                gameOver = true;
+            }
+            
+            snowballs.splice(i, 1); 
+            i--;
+        }
+    }
+}
+
+// --- Bucle Principal del Juego ---
+function gameLoop() {
+    if (!penguinLoaded) {
+        requestAnimationFrame(gameLoop); 
+        return;
+    }
+    
+    if (gameOver) {
+        // Pantalla de FIN DEL JUEGO
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#4A4A4A'; 
+        ctx.font = '30px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(`FIN DEL JUEGO`, canvas.width / 2, canvas.height / 2 - 30);
+        
+        // Muestra la puntuación final EN EL CANVAS (además de en el HUD externo)
+        ctx.fillText(`Puntuación final: ${score}`, canvas.width / 2, canvas.height / 2 + 10);
+        
+        drawLives();
+        return;
+    }
+    
+    // --- Lógica de Aceleración (AHORA cada 15 puntos) ---
+    const currentMultiplierLevel = Math.floor(score / accelerationInterval);
+    speedMultiplier = 1.0 + (currentMultiplierLevel * speedIncrease); 
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    penguin.update();
+    penguin.draw();
+
+    createSnowball();
+
+    updateSnowballs();
+    drawSnowballs();
+    
+    // Dibuja las vidas y actualiza la puntuación externa
+    drawLives();
+
+    requestAnimationFrame(gameLoop);
+}
+
+// --- Control de Teclado (Sin cambios) ---
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'a') {
+        penguin.dx = -penguin.speed;
+    } else if (e.key === 'ArrowRight' || e.key === 'd') {
+        penguin.dx = penguin.speed;
+    }
+});
+
+document.addEventListener('keyup', (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'ArrowRight' || e.key === 'd') {
+        penguin.dx = 0;
+    }
+});
+
+// Inicializamos el loop de juego
+requestAnimationFrame(gameLoop);
+</script>
+
+</body>
+</html>
